@@ -10,7 +10,9 @@ MODULE_AUTHOR("Vladislav Turgenev");
 MODULE_DESCRIPTION("Pulse coin acceptor driver"); 
 MODULE_VERSION("0.1");     
 
-static int ca_counter = 0;
+static int pin_numbers[] = {18, 27};
+
+static volatile int ca_counter = 0;
 
 static int irq_number; 
 static unsigned int signal_pin = 18;    // pin 12 
@@ -19,7 +21,7 @@ static irq_handler_t signal_pin_irq_handler(unsigned int irq, void *dev_id, stru
 
 static int __init cadriver_init(void) 
 {
-	int result = 0;
+int result = 0;
 
     printk(KERN_INFO "Coin acceptor module is loaded\n");
 
@@ -38,12 +40,16 @@ static int __init cadriver_init(void)
 static void __exit cadriver_exit(void) 
 {
     printk(KERN_INFO "Coin acceptor module is unloaded\n");
+	
+	free_irq(irq_number, NULL);
+	gpio_unexport(signal_pin);
+	gpio_free(signal_pin);
 }
 
 static irq_handler_t signal_pin_irq_handler(unsigned int irq, void *dev_id, struct pt_regs *regs)
 {
-    printk(KERN_INFO "Coin accepted\n");
-    ca_counter++;                    
+    ca_counter++;   
+    printk(KERN_INFO "Coin accepted %d\n",ca_counter);             
     return (irq_handler_t) IRQ_HANDLED; 
 }
 
