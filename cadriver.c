@@ -2,6 +2,9 @@
 #include <linux/module.h>    
 #include <linux/kernel.h>    
 
+#include <linux/interrupt.h>
+#include <linux/gpio.h>
+
 MODULE_LICENSE("GPL");      
 MODULE_AUTHOR("Vladislav Turgenev");  
 MODULE_DESCRIPTION("Pulse coin acceptor driver"); 
@@ -16,6 +19,8 @@ static irq_handler_t signal_pin_irq_handler(unsigned int irq, void *dev_id, stru
 
 static int __init cadriver_init(void) 
 {
+	int result = 0;
+
     printk(KERN_INFO "Coin acceptor module is loaded\n");
 
     gpio_request(signal_pin, "sysfs");       
@@ -23,10 +28,9 @@ static int __init cadriver_init(void)
     gpio_export(signal_pin, false);          
 
 
-    irq_number = gpio_to_irq(gpioButton);     
+    irq_number = gpio_to_irq(signal_pin);     
     printk(KERN_INFO "%d pin mapped to IRQ: %d\n",signal_pin, irq_number);
 
-    int result = 0;
     result = request_irq(irq_number, (irq_handler_t) signal_pin_irq_handler, IRQF_TRIGGER_RISING,  "my_interrupt",  NULL); 
     return result;
 }
