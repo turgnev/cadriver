@@ -13,15 +13,15 @@ MODULE_DESCRIPTION("Pulse coin acceptor driver");
 MODULE_VERSION("0.1");     
 
 static struct timer_list my_timer;
-static int counting_time = 1000;
-static int is_counting;
-static int pulse_count;
+static int counting_time = 1200;
+static volatile int is_counting=0;
+static volatile int pulse_count;
 
 
 void timer_callback(unsigned long data)
 {
     printk(KERN_INFO "got (%d) pulses.\n", pulse_count);
-    is_counting == 0;
+    is_counting = 0;
 }
 
 static int pin_numbers[] = {18, 27};
@@ -39,7 +39,7 @@ static int __init cadriver_init(void)
 
     printk(KERN_INFO "Coin acceptor module is loaded\n");
 
-    setup_timer( &my_timer, my_timer_callback, 0 );
+    setup_timer( &my_timer, timer_callback, 0 );
     is_counting = 0;
 
     gpio_request(signal_pin, "sysfs");       
@@ -65,15 +65,16 @@ static void __exit cadriver_exit(void)
 
 static irq_handler_t signal_pin_irq_handler(unsigned int irq, void *dev_id, struct pt_regs *regs)
 {
-    ca_counter++;  
+    ca_counter++;
     if (is_counting == 0)
     {
-        is_counting == 1;
+        is_counting = 1;
         pulse_count = 0;
-        mod_timer( &my_timer, jiffies + msecs_to_jiffies(counting_time)); 
+        mod_timer(&my_timer, jiffies + msecs_to_jiffies(counting_time)); 
     }
-    pulse_count++;
-    printk(KERN_INFO "Pulse accepted %d\n",ca_counter);             
+    pulse_count++; 
+
+    printk(KERN_INFO "Pulse accepted %d %d %d\n",ca_counter, pulse_count, is_counting);             
     return (irq_handler_t) IRQ_HANDLED; 
 }
 
