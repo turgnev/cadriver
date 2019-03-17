@@ -17,8 +17,9 @@
 #include <linux/device.h>
 #include <linux/cdev.h>
 
+#include "bank.h"
 
-#define COOKIE_BUF_SIZE PAGE_SIZE
+#define mbuffer_SIZE 100
 
 MODULE_LICENSE("GPL");      
 MODULE_AUTHOR("Vladislav Turgenev");  
@@ -27,13 +28,37 @@ MODULE_VERSION("0.1");
 
 
 
-
-
-
-
 dev_t dev = 0;
 static struct class *dev_class;
 static struct cdev etx_cdev;
+
+
+static volatile int ca_counter = 0;
+static struct bank_t bank;
+
+struct counter
+{
+    struct timer_list my_timer;
+    int counting_time;   
+    volatile int is_counting; 
+    volatile int pulse_count;
+};
+
+
+void timer_callback(unsigned long data);
+
+void init_counter(struct counter *c)
+{
+    c->counting_time = 1200;
+    c->is_counting = 0;
+    c->pulse_count = 0;
+    setup_timer(&(c->my_timer), timer_callback, 0 );
+}
+
+static struct timer_list my_timer;
+static int counting_time = 1200;
+static volatile int is_counting=0;
+static volatile int pulse_count;
 
 
 enum regime {
@@ -46,7 +71,6 @@ enum regime {
 
 enum regime current_regime;
 
-#define COOKIE_BUF_SIZE PAGE_SIZE
 
 ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos);
 ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *f_pos);
@@ -58,27 +82,10 @@ struct file_operations fops = {
 };
 
 
-char *cookie_buf;
-
-
-int regime = 0;
+static char *mbuffer;
 
 
 
-
-
-
-
-
-
-
-
-ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
-{
-    printk(KERN_INFO "Reading from device\n");
-    int len = sprintf(cookie_buf, "%d\n", regime);
-    return simple_read_from_buffer(buf, count, f_pos, cookie_buf, len);
-}
 
 char * mystrtok(char * str, const char * delim)
 {
@@ -110,7 +117,7 @@ int parse_set(char* str, unsigned long int* num, unsigned long int* val, unsigne
     char sep [2]=" ";
     char *istr;
 
-    istr = mystrtok(cookie_buf,sep); //set
+    istr = mystrtok(mbuffer,sep); //set
  
     istr = mystrtok (NULL,sep); // n
     *num = simple_strtoul(istr, NULL, 10);
@@ -124,45 +131,94 @@ int parse_set(char* str, unsigned long int* num, unsigned long int* val, unsigne
     return 0;
 }
 
+int parse_time(char* str, unsigned long int* time)
+{
+    char sep [2]=" ";
+    char *istr;
+
+    istr = mystrtok(mbuffer,sep); //time
+ 
+    istr = mystrtok (NULL,sep); // n
+    *time = simple_strtoul(istr, NULL, 10);
+  
+    return 0;
+}
+
+
+
+
+ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
+{
+    printk(KERN_INFO "Reading from device\n");
+
+    int len;
+    if (current_regime == TOTAL)
+        len = sprintf(mbuffer, "%d\n", ca_counter);
+    else if (current_regime == COIN1)
+        len = sprintf(mbuffer, "%d\n", bank.number[0]);
+    else if (current_regime == COIN2)
+        len = sprintf(mbuffer, "%d\n", bank.number[1]);
+    else if (current_regime == COIN3)
+        len = sprintf(mbuffer, "%d\n", bank.number[2]);
+    else if (current_regime == COIN4)
+        len = sprintf(mbuffer, "%d\n", bank.number[3]);
+
+    return simple_read_from_buffer(buf, count, f_pos, mbuffer, len);
+}
+
+
 ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *f_pos)
 {
-    printk(KERN_INFO "Writing into chdevice\n");
-	if (copy_from_user(&cookie_buf[0], buf, count))
+    printk(KERN_INFO "Writing into device\n");
+	if (copy_from_user(&mbuffer[0], buf, count))
 	{
 		return -EFAULT;
 	}
 
-	cookie_buf[count-1] = 0;
+	mbuffer[count-1] = 0;
 
-    printk(KERN_INFO "%s\n", cookie_buf);
+    printk(KERN_INFO "%s\n", mbuffer);
 
-    if (strstr(cookie_buf, "showtotal"))
+    if (strstr(mbuffer, "showtotal"))
         current_regime = TOTAL;
-    else if (strstr(cookie_buf, "show1"))
+    else if (strstr(mbuffer, "show1"))
         current_regime = COIN1;
-    else if (strstr(cookie_buf, "show2"))
+    else if (strstr(mbuffer, "show2"))
         current_regime = COIN2;
-    else if (strstr(cookie_buf, "show3"))
+    else if (strstr(mbuffer, "show3"))
         current_regime = COIN3;
-    else if (strstr(cookie_buf, "show4"))
+    else if (strstr(mbuffer, "show4"))
         current_regime = COIN4;
-    else if (strstr(cookie_buf, "clear"))
-    {}
-    else if (strstr(cookie_buf, "time"))
-    {}
-    else if (strstr(cookie_buf, "set"))
+    else if (strstr(mbuffer, "clear"))
+    {
+        ca_counter = 0;
+        clear_bank(&bank);
+    }
+    else if (strstr(mbuffer, "time"))
+    {
+        unsigned long int time;
+        if (!parse_time(mbuffer, &time))
+        {
+            counting_time = time;
+            printk(KERN_INFO "Time is set %d\n", time);
+        }
+    }
+    else if (strstr(mbuffer, "set"))
     {
         printk(KERN_INFO "set parsing\n");   
-        unsigned long int a,b,c;
-        if (parse_set(cookie_buf, &a, &b, &c) == 0)
+        unsigned long int n,val,pulse;
+        if (parse_set(mbuffer, &n, &val, &pulse) == 0)
         {
-		    printk(KERN_INFO "Success %lu %lu %lu\n", a,b,c);
+		    if (n<4)
+            {
+                bank.coin[n].value = val;
+                bank.coin[n].pulse = pulse;
+                printk(KERN_INFO "Pulses set\n");
+            }
         }
-        else
-		    printk(KERN_INFO "parse error\n");
     }
     else
-        printk(KERN_INFO "unnknowh command\n");        
+        printk(KERN_INFO "unknown command\n");        
 
 	return count;
 }
@@ -170,65 +226,6 @@ ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *
 
 
 
-
-
-
-struct coin_t
-{
-	int value;
-	int pulse;
-};
-
-struct bank_t
-{
-	struct coin_t coin[4];
-	int number[4];
-};
-
-
-static struct bank_t bank;
-
-struct counter
-{
-    struct timer_list my_timer;
-    int counting_time;   
-    volatile int is_counting; 
-    volatile int pulse_count;
-};
-
-void init_bank(struct bank_t *b)
-{
-	int i;
-	for (i=0; i<4; i++)
-		b->number[i] = 0;
-		
-	b->coin[0].value = 1;
-	b->coin[0].pulse = 1;
-	
-	b->coin[1].value = 2;
-	b->coin[1].pulse = 2;
-	
-	b->coin[2].value = 5;
-	b->coin[2].pulse = 5;
-	
-	b->coin[3].value = 10;
-	b->coin[3].pulse = 10;				
-}
-
-void timer_callback(unsigned long data);
-
-void init_counter(struct counter *c)
-{
-    c->counting_time = 1200;
-    c->is_counting = 0;
-    c->pulse_count = 0;
-    setup_timer(&(c->my_timer), timer_callback, 0 );
-}
-
-static struct timer_list my_timer;
-static int counting_time = 1200;
-static volatile int is_counting=0;
-static volatile int pulse_count;
 
 
 void timer_callback(unsigned long data)
@@ -249,7 +246,6 @@ void timer_callback(unsigned long data)
 
 static int pin_numbers[] = {18, 27};
 
-static volatile int ca_counter = 0;
 
 static int irq_number; 
 static unsigned int signal_pin = 18;    // pin 12 
@@ -260,15 +256,16 @@ static int __init cadriver_init(void)
 {
     int result = 0;
 
+    current_regime = TOTAL;
     init_bank(&bank);
 
-	cookie_buf = vmalloc(COOKIE_BUF_SIZE);
-	if (!cookie_buf)
+	mbuffer = vmalloc(mbuffer_SIZE);
+	if (!mbuffer)
 	{
 		printk(KERN_INFO "Not enough memory for the cookie pot.\n");
 		return -ENOMEM;
 	}
-	memset(cookie_buf, 0, COOKIE_BUF_SIZE);
+	memset(mbuffer, 0, mbuffer_SIZE);
 
     
 
@@ -343,9 +340,9 @@ static void __exit cadriver_exit(void)
     cdev_del(&etx_cdev);
     unregister_chrdev_region(dev, 1);
 
-	if (cookie_buf)
+	if (mbuffer)
 	{
-		vfree(cookie_buf);
+		vfree(mbuffer);
 	}
 }
 
