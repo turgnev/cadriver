@@ -206,13 +206,13 @@ void init_bank(struct bank_t *b)
 	b->coin[0].pulse = 1;
 	
 	b->coin[1].value = 2;
-	b->coin[1].value = 2;
+	b->coin[1].pulse = 2;
 	
 	b->coin[2].value = 5;
-	b->coin[2].value = 5;
+	b->coin[2].pulse = 5;
 	
 	b->coin[3].value = 10;
-	b->coin[3].value = 10;				
+	b->coin[3].pulse = 10;				
 }
 
 void timer_callback(unsigned long data);
@@ -235,12 +235,15 @@ void timer_callback(unsigned long data)
 {
 	int i;
 	for (i=0; i<4; i++)
+	{
+		printk(KERN_INFO "%d ", bank.coin[i].pulse);
 		if (bank.coin[i].pulse == pulse_count)
 			bank.number[i]++;
+	}
 			
     printk(KERN_INFO "got (%d) pulses.\n", pulse_count);
     
-    printk(KERN_INFO "got %d - 1.\n %d - 2\n %d -5\n %d -10\n", bank.number[0], bank.number[1],bank.number[2],bank.number[3],);
+    printk(KERN_INFO "got %d - 1.\n %d - 2\n %d -5\n %d -10\n", bank.number[0], bank.number[1],bank.number[2],bank.number[3]);
     is_counting = 0;
 }
 
@@ -257,6 +260,7 @@ static int __init cadriver_init(void)
 {
     int result = 0;
 
+    init_bank(&bank);
 
 	cookie_buf = vmalloc(COOKIE_BUF_SIZE);
 	if (!cookie_buf)
