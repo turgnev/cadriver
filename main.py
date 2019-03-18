@@ -32,6 +32,11 @@ def get_nums(event):
     with open('/dev/etx_device', 'r') as f:
         content = f.readlines()
         nums.append(content[0])
+    print(nums)
+    label1.config(text = "Монет достоинством "+ "1" + " - " + str(nums[0]) + " Штук")  
+    label2.config(text = "Монет достоинством "+ "2" + " - " + str(nums[1]) + " Штук")
+    label3.config(text = "Монет достоинством "+ "5" + " - " + str(nums[2]) + " Штук")
+    label4.config(text = "Монет достоинством "+ "10" + " - " + str(nums[3]) + " Штук")
 
 
 def clear_ca(event):
