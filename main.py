@@ -3,24 +3,33 @@ from tkinter import *
 nums = [0,0,0,0]
 
 def get_nums(event):
-    print(u'Вы нажали левую кнопку мыши')
     nums = []
-
-    
-    with open('/dev/etx_device', 'r+') as f:
+  
+    with open('/dev/etx_device', 'w') as f:
         print('show1', file=f)
+
+    with open('/dev/etx_device', 'r') as f:
         content = f.readlines()
         nums.append(content[0])
 
+    with open('/dev/etx_device', 'w') as f:
         print('show2', file=f)
+
+    with open('/dev/etx_device', 'r') as f:
         content = f.readlines()
         nums.append(content[0])
 
+    with open('/dev/etx_device', 'w') as f:
         print('show3', file=f)
+
+    with open('/dev/etx_device', 'r') as f:
         content = f.readlines()
         nums.append(content[0])
 
+    with open('/dev/etx_device', 'w') as f:
         print('show4', file=f)
+
+    with open('/dev/etx_device', 'r') as f:
         content = f.readlines()
         nums.append(content[0])
 
