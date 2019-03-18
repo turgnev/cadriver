@@ -162,6 +162,8 @@ ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
         len = sprintf(mbuffer, "%d\n", bank.number[2]);
     else if (current_regime == COIN4)
         len = sprintf(mbuffer, "%d\n", bank.number[3]);
+   else 
+        len = sprintf(mbuffer, "%d\n", -1);
 
     return simple_read_from_buffer(buf, count, f_pos, mbuffer, len);
 }
