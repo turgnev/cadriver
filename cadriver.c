@@ -32,7 +32,7 @@ dev_t dev = 0;
 static struct class *dev_class;
 static struct cdev etx_cdev;
 
-
+static char *mbuffer;
 static volatile int ca_counter = 0;
 static struct bank_t bank;
 
@@ -72,19 +72,14 @@ enum regime {
 enum regime current_regime;
 
 
-ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos);
-ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *f_pos);
+ssize_t ca_read(struct file *file, char *buf, size_t count, loff_t *f_pos);
+ssize_t ca_write(struct file *file, const char *buf, size_t count, loff_t *f_pos);
 
 struct file_operations fops = {
     .owner = THIS_MODULE,
-	.read = fortune_read,
-	.write = fortune_write,
+	.read = ca_read,
+	.write = ca_write,
 };
-
-
-static char *mbuffer;
-
-
 
 
 char * mystrtok(char * str, const char * delim)
@@ -145,9 +140,7 @@ int parse_time(char* str, unsigned long int* time)
 }
 
 
-
-
-ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
+ssize_t ca_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
 {
     printk(KERN_INFO "Reading from device\n");
 
@@ -169,7 +162,7 @@ ssize_t fortune_read(struct file *file, char *buf, size_t count, loff_t *f_pos)
 }
 
 
-ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *f_pos)
+ssize_t ca_write(struct file *file, const char *buf, size_t count, loff_t *f_pos)
 {
     printk(KERN_INFO "Writing into device\n");
 	if (copy_from_user(&mbuffer[0], buf, count))
@@ -226,10 +219,6 @@ ssize_t fortune_write(struct file *file, const char *buf, size_t count, loff_t *
 }
 
 
-
-
-
-
 void timer_callback(unsigned long data)
 {
 	int i;
@@ -269,7 +258,6 @@ static int __init cadriver_init(void)
 	}
 	memset(mbuffer, 0, mbuffer_SIZE);
 
-    
 
     printk(KERN_INFO "Coin acceptor module is loaded\n");
 
@@ -287,8 +275,6 @@ static int __init cadriver_init(void)
     result = request_irq(irq_number, (irq_handler_t) signal_pin_irq_handler, IRQF_TRIGGER_RISING,  "my_interrupt",  NULL); 
 
 
-
-		/*Allocating Major number*/
 	if((alloc_chrdev_region(&dev, 0, 1, "etx_Dev")) <0)
 	{
 			printk(KERN_INFO "Cannot allocate major number for device\n");
@@ -304,7 +290,6 @@ static int __init cadriver_init(void)
 		result = -1;
 	}
 
-	/*Creating struct class*/
 	if((dev_class = class_create(THIS_MODULE,"etx_class")) == NULL)
 	{
 		printk(KERN_INFO "Cannot create the struct class for device\n");
@@ -312,7 +297,6 @@ static int __init cadriver_init(void)
 		result = -1;
 	}
 
-	/*Creating device*/
 	if((device_create(dev_class,NULL,dev,NULL,"etx_device")) == NULL)
 	{
 		printk(KERN_INFO "Cannot create the Device\n");
@@ -322,9 +306,6 @@ static int __init cadriver_init(void)
 	}
 
 	printk(KERN_INFO "Kernel Module Inserted Successfully...\n");
-
-
-    
     return result;
 }
 
